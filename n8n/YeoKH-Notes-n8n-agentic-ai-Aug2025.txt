@@ -1,0 +1,174 @@
+#########################################
+OpenShift Demo with n8n - https://n8n.io/
+#########################################
+
+n8n is an AI workflow automation builder.  Using drag-n-drop UI, n8n enables you to build and implement multi-step AI agents with integrations to other tools.
+
+Tools calling with n8n LangChain agent: In LangChain, a tool is an association between a function and its schema.  We need to bind/connect the tool to the model that supports tool/function calling. This gives the model awareness of the tool and the associated input schema required by the tool.  The model can then decide, when appropriate, to call the tool and ensure its response conforms to the tool's input schema in order to execute the tool/function.
+
+https://docs.n8n.io/hosting/configuration/configuration-examples/isolation/
+
+Deploy and try n8n on OpenShift
+===============================
+Register for a Red Hat Developer account: https://developers.redhat.com/register
+Access your Red Hat Developer Sandbox environment: https://sandbox.redhat.com/  or  https://developers.redhat.com/developer-sandbox
+
+Log in to your OpenShift Sandbox environment to deploy 
+
+
+Modify n8n container image file 
+===============================
+
+Modify the n8n container file to add the commands to grant the correct file permissions for the application to run under OpenShift's strict security model.
+
+When OpenShift starts the container, it as a random high-number user, e.g., user 1001050000.  And your application, now running as user 1001050000, tries to write a file to a directory owned by root or a specific user id, your application will encounter denied permission errors. 
+
+Add the command chmod -R g=u in the container file to set the group's permissions to be identical to the user's (owner's) permissions.
+
+Create Custom Image for OpenShift
+---------------------------------
+$ git clone https://github.com/n8n-io/n8n.git
+$ cd n8n
+>> Copy the custom docker/container file to cloned root folder - https://github.com/n8n-io/n8n/blob/master/docker/images/n8n-custom/Dockerfile
+>> In the n8n root folder, edit the docker file to change the file/folder permissions:
+...
+        ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
+        mkdir .n8n && \
+        chown node:node .n8n \
+        ### Change file and folder permissions ###
+        && chmod -R g=u .n8n \
+        && mkdir /.n8n \
+        && chmod -R g=u /.n8n \
+        && mkdir /.cache \
+        && chmod -R g=u /.cache
+ENV SHELL /bin/sh
+...
+
+$ podman build --no-cache -f <customized_container_file> -t quay.io/<customized_n8n_image_repo>:v1.0 . 
+>> To prevent cached layers during a build, you can use the --no-cache option with the podman build command. This ensures that all layers are rebuilt from scratch, avoiding any cached results. Do this if 
+
+>> Test the image or run locally
+$ podman  volume create n8n_data
+$ podman run -it --rm --name n8n -e N8N_RUNNERS_ENABLED='true' -e N8N_SECURE_COOKIE='false' -p 5678:5678 -v n8n_data:/home/node/.n8n  docker.n8n.io/n8nio/n8n
+$ podman run -it --rm --name n8n -e N8N_RUNNERS_ENABLED='true' -e N8N_SECURE_COOKIE='false' -p 5678:5678 -v n8n_data:/home/node/.n8n  quay.io/<customized_n8n_image_repo>:v1.0
+
+>> Push the image to the registry
+$ podman login <your image repo -u ID and -p Credential> quay.io
+$ podman push quay.io/<customized_n8n_image_repo>:v1.0
+>> Login to your image registry, for example quay.io, and set the repository to public for testing on OpenShift sandbox environment
+
+You can use the following customized image: quay.io/kenghua_yeo/yn8n:v1.3
+
+
+Deploy on OpenShift
+===================
+$ oc login >>> login to OpenShift workshop project/namespace
+$ oc project
+
+$ oc apply -f n8n-deploy.yaml
+$ oc get pods
+$ oc events pod/xxx
+$ oc logs xxx
+
+$ oc apply -f n8n-service.yaml
+$ oc get services
+
+$ oc apply -f n8n-route.yaml
+$ oc get routes
+$ oc edit route/n8n   >> Verify tls termination at edge to enable HTTPS
+
+$ oc delete -f n8n-route.yaml
+$ oc delete -f n8n-service.yaml
+$ oc delete -f n8n-deploy.yaml
+
+>> Worksing examples of the above
+$ vi n8n-deploy.yaml
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    service: n8n
+  name: n8n
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      service: n8n
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        service: n8n
+    spec:
+      containers:
+        - command:
+            - /bin/sh
+          args:
+            - -c
+            - sleep 5; n8n start
+          env:
+            - name: N8N_PROTOCOL
+              value: http
+            - name: N8N_PORT
+              value: "5678"
+            - name: N8N_SECURE_COOKIE
+              value: "false"
+          image: quay.io/kenghua_yeo/yn8n:v1.3
+          name: n8n
+          ports:
+            - containerPort: 5678
+          resources:
+            requests:
+              memory: "250Mi"
+            limits:
+              memory: "500Mi"
+      restartPolicy: Always
+
+>> 	  
+$ vi n8n-service.yaml
+---
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    service: n8n
+  name: n8n
+spec:
+  type: ClusterIP
+  ports:
+    - name: "5678"
+      port: 5678
+      targetPort: 5678
+      protocol: TCP
+  selector:
+    service: n8n
+
+>> To ensure external route is created for HTTPS, verify/modify the route specification for tls termination at edge.
+$ vi n8n-route.yaml
+---
+kind: Route
+apiVersion: route.openshift.io/v1
+metadata:
+  name: n8n
+  labels:
+    service: n8n
+spec:
+  to:
+    kind: Service
+    name: n8n
+    weight: 100
+  port:
+    targetPort: 5678
+  tls:
+    termination: edge
+  wildcardPolicy: None
+
+
+Useful links to use for the demo:
+Get SG weather data - https://api-open.data.gov.sg/v2/real-time/api/twenty-four-hr-forecast
+
+
+
+
