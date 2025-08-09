@@ -37,14 +37,21 @@ Git clone and copy from n8n git repository the the custom docker/container file 
 
 In the root folder of the cloned n8n git repo, edit the docker file to change the file/folder permissions:
 
-| $ git clone https://github.com/n8n-io/n8n.git $ cd n8n $ cp docker/images/n8n-custom/Dockerfile \<customized\_container\_file\> $ vi \<customized\_container\_file\> ...         mkdir .n8n && \\         chown node:node .n8n \\         \#\#\# Change file and folder permissions \#\#\#         && chmod \-R g=u .n8n \\         && mkdir /.n8n \\         && chmod \-R g=u /.n8n \\         && mkdir /.cache \\         && chmod \-R g=u /.cache ENV SHELL /bin/sh ... $ podman build \--no-cache \-f \<customized\_container\_file\> \-t quay.io/\<customized\_n8n\_image\_repo\>:v1.0 .  |
+$ git clone https://github.com/n8n-io/n8n.git 
+$ cd n8n 
+$ cp docker/images/n8n-custom/Dockerfile \<customized\_container\_file\> 
+$ vi \<customized\_container\_file\> 
+...         
+mkdir .n8n && \\         
+chown node:node .n8n \\         \#\#\# Change file and folder permissions \#\#\#         && chmod \-R g=u .n8n \\         && mkdir /.n8n \\         && chmod \-R g=u /.n8n \\         && mkdir /.cache \\         && chmod \-R g=u /.cache ENV SHELL /bin/sh ... $ podman build \--no-cache \-f \<customized\_container\_file\> \-t quay.io/\<customized\_n8n\_image\_repo\>:v1.0 .  |
 | :---- |
 
 To prevent cached layers being used during a build, use the \--no-cache option with the podman build command. This ensures that all layers are rebuilt from scratch, avoiding any cached results. Do this if your build does not produce the expected modified image.
 
 Test the image by running it locally:
 
-| $ podman  volume create n8n\_data $ podman run \-it \--rm \--name n8n \-e N8N\_RUNNERS\_ENABLED='true' \-e N8N\_SECURE\_COOKIE='false' \-p 5678:5678 \-v n8n\_data:/home/node/.n8n  quay.io/\<customized\_n8n\_image\_repo\>:v1.0 \#\# You can also try running the unmodified n8n container image $ podman run \-it \--rm \--name n8n \-e N8N\_RUNNERS\_ENABLED='true' \-e N8N\_SECURE\_COOKIE='false' \-p 5678:5678 \-v n8n\_data:/home/node/.n8n  docker.n8n.io/n8nio/n8n |
+| $ podman  volume create n8n\_data $ podman run \-it \--rm \--name n8n \-e N8N\_RUNNERS\_ENABLED='true' \-e N8N\_SECURE\_COOKIE='false' \-p 5678:5678 \-v n8n\_data:/home/node/.n8n  quay.io/\<customized\_n8n\_image\_repo\>:v1.0 \#\# You can also try running the unmodified n8n container image 
+$ podman run \-it \--rm \--name n8n \-e N8N\_RUNNERS\_ENABLED='true' \-e N8N\_SECURE\_COOKIE='false' \-p 5678:5678 \-v n8n\_data:/home/node/.n8n  docker.n8n.io/n8nio/n8n |
 | :---- |
 
 To deploy to an OpenShift cluster, push the image to an external image registry that is accessible from the OpenShift cluster.  You may need to log in to the external image registry, for example quay.io, and set the repository to public for testing on OpenShift sandbox environment.
